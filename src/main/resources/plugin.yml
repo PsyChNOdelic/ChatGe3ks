@@ -1,0 +1,10 @@
+name: ChatGe3ks
+version: '1'
+main: dev.lsdmc.chatGe3ks.ChatGe3ks
+api-version: '1.21'
+load: STARTUP
+authors: [ Nenf ]
+commands:
+  welcomemsg:
+    description: Manage welcome messages.
+    usage: /<command> <list|add|remove|reload>

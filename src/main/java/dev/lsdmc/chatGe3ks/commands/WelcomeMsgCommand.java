@@ -5,11 +5,15 @@ import dev.lsdmc.chatGe3ks.util.Constants;
 import dev.lsdmc.chatGe3ks.util.LoggerUtils;
 import dev.lsdmc.chatGe3ks.util.MessageUtils;
 import dev.lsdmc.chatGe3ks.welcome.WelcomeMessagesManager;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,29 +37,27 @@ public class WelcomeMsgCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         if (args.length == 0) {
             showHelp(sender);
             return true;
         }
 
         String subcommand = args[0].toLowerCase();
-        switch (subcommand) {
-            case "list":
-                return handleListCommand(sender, args);
-            case "add":
-                return handleAddCommand(sender, args);
-            case "remove":
-                return handleRemoveCommand(sender, args);
-            case "reload":
-                return handleReloadCommand(sender, args);
-            case "help":
+        return switch (subcommand) {
+            case "list" -> handleListCommand(sender, args);
+            case "add" -> handleAddCommand(sender, args);
+            case "remove" -> handleRemoveCommand(sender, args);
+            case "reload" -> handleReloadCommand(sender, args);
+            case "help" -> {
                 showHelp(sender);
-                return true;
-            default:
+                yield true;
+            }
+            default -> {
                 messageUtils.sendError(sender, "Unknown subcommand. Use /welcomemsg help for usage information.");
-                return true;
-        }
+                yield true;
+            }
+        };
     }
 
     private boolean handleListCommand(CommandSender sender, String[] args) {
@@ -89,13 +91,29 @@ public class WelcomeMsgCommand implements CommandExecutor, TabCompleter {
         int start = (page - 1) * perPage;
         int end = Math.min(start + perPage, messages.size());
 
-        messageUtils.sendInfo(sender, "=== Welcome Messages (Page " + page + "/" + totalPages + ") ===");
+        // Send header
+        Component header = Component.text("=== Welcome Messages (Page " + page + "/" + totalPages + ") ===")
+                .color(NamedTextColor.GOLD)
+                .decorate(TextDecoration.BOLD);
+
+        plugin.adventure().sender(sender).sendMessage(header);
+
+        // Send messages
         for (int i = start; i < end; i++) {
-            messageUtils.sendInfo(sender, (i + 1) + ". " + messages.get(i));
+            String message = messages.get(i);
+            Component messageComponent = Component.text((i + 1) + ". ")
+                    .color(NamedTextColor.AQUA)
+                    .append(Component.text(message).color(NamedTextColor.WHITE));
+
+            plugin.adventure().sender(sender).sendMessage(messageComponent);
         }
 
+        // Send footer if needed
         if (page < totalPages) {
-            messageUtils.sendInfo(sender, "Use /welcomemsg list " + (page + 1) + " for the next page");
+            Component footer = Component.text("Use /welcomemsg list " + (page + 1) + " for the next page")
+                    .color(NamedTextColor.GRAY);
+
+            plugin.adventure().sender(sender).sendMessage(footer);
         }
 
         return true;
@@ -173,15 +191,55 @@ public class WelcomeMsgCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showHelp(CommandSender sender) {
-        messageUtils.sendInfo(sender, "=== Welcome Messages Commands ===");
-        messageUtils.sendInfo(sender, "/welcomemsg list [page] - List all welcome messages");
-        messageUtils.sendInfo(sender, "/welcomemsg add <message> - Add a new welcome message");
-        messageUtils.sendInfo(sender, "/welcomemsg remove <index> - Remove a message by index");
-        messageUtils.sendInfo(sender, "/welcomemsg reload - Reload messages from file");
-        messageUtils.sendInfo(sender, "=== Placeholders ===");
-        messageUtils.sendInfo(sender, "{player} - Player's name");
-        messageUtils.sendInfo(sender, "{server} - Server name");
-        messageUtils.sendInfo(sender, "{online} - Online player count");
+        // Create header component
+        Component header = Component.text("=== Welcome Messages Commands ===")
+                .color(NamedTextColor.GOLD)
+                .decorate(TextDecoration.BOLD);
+
+        // Create command components
+        Component listCmd = Component.text("/welcomemsg list [page]")
+                .color(NamedTextColor.GREEN)
+                .append(Component.text(" - List all welcome messages").color(NamedTextColor.GRAY));
+
+        Component addCmd = Component.text("/welcomemsg add <message>")
+                .color(NamedTextColor.GREEN)
+                .append(Component.text(" - Add a new welcome message").color(NamedTextColor.GRAY));
+
+        Component removeCmd = Component.text("/welcomemsg remove <index>")
+                .color(NamedTextColor.GREEN)
+                .append(Component.text(" - Remove a message by index").color(NamedTextColor.GRAY));
+
+        Component reloadCmd = Component.text("/welcomemsg reload")
+                .color(NamedTextColor.GREEN)
+                .append(Component.text(" - Reload messages from file").color(NamedTextColor.GRAY));
+
+        // Create placeholders section
+        Component placeholdersHeader = Component.text("=== Placeholders ===")
+                .color(NamedTextColor.GOLD)
+                .decorate(TextDecoration.BOLD);
+
+        Component playerPlaceholder = Component.text("{player}")
+                .color(NamedTextColor.AQUA)
+                .append(Component.text(" - Player's name").color(NamedTextColor.GRAY));
+
+        Component serverPlaceholder = Component.text("{server}")
+                .color(NamedTextColor.AQUA)
+                .append(Component.text(" - Server name").color(NamedTextColor.GRAY));
+
+        Component onlinePlaceholder = Component.text("{online}")
+                .color(NamedTextColor.AQUA)
+                .append(Component.text(" - Online player count").color(NamedTextColor.GRAY));
+
+        // Send all components
+        plugin.adventure().sender(sender).sendMessage(header);
+        plugin.adventure().sender(sender).sendMessage(listCmd);
+        plugin.adventure().sender(sender).sendMessage(addCmd);
+        plugin.adventure().sender(sender).sendMessage(removeCmd);
+        plugin.adventure().sender(sender).sendMessage(reloadCmd);
+        plugin.adventure().sender(sender).sendMessage(placeholdersHeader);
+        plugin.adventure().sender(sender).sendMessage(playerPlaceholder);
+        plugin.adventure().sender(sender).sendMessage(serverPlaceholder);
+        plugin.adventure().sender(sender).sendMessage(onlinePlaceholder);
     }
 
     /**
@@ -198,7 +256,7 @@ public class WelcomeMsgCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String[] args) {
         if (args.length == 1) {
             // First argument - suggest subcommands the player has permission for
             List<String> subcommands = new ArrayList<>();

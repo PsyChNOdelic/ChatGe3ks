@@ -4,6 +4,8 @@ import dev.lsdmc.chatGe3ks.ChatGe3ks;
 import dev.lsdmc.chatGe3ks.rewards.RewardsManager;
 import dev.lsdmc.chatGe3ks.util.Constants;
 import dev.lsdmc.chatGe3ks.util.LoggerUtils;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -109,6 +111,9 @@ public class ChatListener implements Listener {
                                 logger.debug("Gave welcome reward to player: " + sender.getName());
                                 // Remove from map regardless of reward success
                                 welcomeWindowMap.remove(uuid);
+
+                                // Send message to other online players about this welcoming action
+                                sendWelcomeActionMessage(sender);
                             }
                         }
                     } catch (Exception e) {
@@ -119,6 +124,25 @@ public class ChatListener implements Listener {
                 // Window expired, remove entry
                 welcomeWindowMap.remove(uuid);
                 logger.debug("Welcome window expired for player: " + sender.getName());
+            }
+        }
+    }
+
+    /**
+     * Sends a message to all players about a welcoming action
+     *
+     * @param welcomer The player who welcomed the newcomer
+     */
+    private void sendWelcomeActionMessage(Player welcomer) {
+        Component message = Component.text(welcomer.getName())
+                .color(NamedTextColor.GOLD)
+                .append(Component.text(" has welcomed a new player and received a reward!")
+                        .color(NamedTextColor.YELLOW));
+
+        // Send to all players except the welcomer
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.equals(welcomer)) {
+                plugin.adventure().player(player).sendMessage(message);
             }
         }
     }

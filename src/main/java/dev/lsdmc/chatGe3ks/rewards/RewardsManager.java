@@ -6,6 +6,9 @@ import dev.lsdmc.chatGe3ks.util.LoggerUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -17,7 +20,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.logging.Level;
 
 public class RewardsManager {
 
@@ -27,6 +29,7 @@ public class RewardsManager {
     private final Gson gson;
     private final ThreadLocalRandom random;
     private final LoggerUtils logger;
+    private final MiniMessage miniMessage;
 
     public RewardsManager(ChatGe3ks plugin) {
         this.plugin = plugin;
@@ -35,6 +38,7 @@ public class RewardsManager {
         this.rewardsFile = new File(plugin.getDataFolder(), Constants.Files.REWARDS_FILE);
         this.rewards = new ArrayList<>();
         this.logger = plugin.getLoggerUtils();
+        this.miniMessage = MiniMessage.miniMessage();
     }
 
     /**
@@ -287,18 +291,38 @@ public class RewardsManager {
                 if (player.getInventory().firstEmpty() == -1) {
                     // Inventory full, drop at player's location
                     player.getWorld().dropItem(player.getLocation(), itemStack);
-                    plugin.getMessageUtils().sendSuccess(player,
-                            "Your inventory was full! Your reward (" +
-                                    amount + " " + material.name() + ") was dropped at your feet.");
+
+                    // Create message component
+                    Component message = Component.text("Your inventory was full! Your reward (")
+                            .color(NamedTextColor.YELLOW)
+                            .append(Component.text(amount + " " + material.name().toLowerCase().replace("_", " "))
+                                    .color(NamedTextColor.GOLD))
+                            .append(Component.text(") was dropped at your feet.")
+                                    .color(NamedTextColor.YELLOW));
+
+                    // Send message
+                    plugin.adventure().player(player).sendMessage(message);
                 } else {
                     player.getInventory().addItem(itemStack);
-                    plugin.getMessageUtils().sendSuccess(player,
-                            "You received a reward: " + amount + " " +
-                                    material.name().toLowerCase().replace("_", " "));
+
+                    // Create message component
+                    Component message = Component.text("You received a reward: ")
+                            .color(NamedTextColor.GREEN)
+                            .append(Component.text(amount + " " + material.name().toLowerCase().replace("_", " "))
+                                    .color(NamedTextColor.GOLD));
+
+                    // Send message
+                    plugin.adventure().player(player).sendMessage(message);
                 }
                 return true;
             } catch (IllegalArgumentException e) {
-                plugin.getMessageUtils().sendError(player, "Reward error: Invalid material " + value);
+                // Create error message component
+                Component message = Component.text("Reward error: Invalid material " + value)
+                        .color(NamedTextColor.RED);
+
+                // Send message
+                plugin.adventure().player(player).sendMessage(message);
+
                 plugin.getLoggerUtils().warning("Invalid material in reward: " + value);
                 return false;
             }
@@ -310,12 +334,20 @@ public class RewardsManager {
                     Bukkit.getConsoleSender(), command);
 
             if (success) {
-                plugin.getMessageUtils().sendSuccess(player, "You received a special reward!");
+                // Get configured message or use default
+                String messageText = plugin.getConfig().getString("messages.reward",
+                        "<green>You received a special reward!</green>");
+
+                // Parse with MiniMessage
+                Component message = MiniMessage.miniMessage().deserialize(messageText);
+
+                // Send message
+                plugin.adventure().player(player).sendMessage(message);
             } else {
                 plugin.getLoggerUtils().warning("Failed to execute command reward: " + command);
                 return false;
             }
-            return success;
+            return true;
         }
     }
 }

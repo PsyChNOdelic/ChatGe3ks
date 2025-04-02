@@ -1,10 +1,33 @@
-# ChatGe3ks default configuration
+# ====================================================
+# ChatGe3ks Configuration
+# ====================================================
 
-redis:
-  host: "redis-12757.c44.us-east-1-2.ec2.redns.redis-cloud.com"
-  port: 12757
-  user: "default"
-  password: "2hBxjuHQtVo1cGhJ5vLUd9giBiLMV7Un"
+# ---------------
+# General Settings
+# ---------------
+
+# Enable debug logging (more verbose output)
+debug: false
 
 # Duration (in seconds) for which a new player's welcome window remains active.
+# Min: 5, Max: 3600 (1 hour)
 welcome-window: 60
+
+# ---------------------
+# Redis Configuration
+# ---------------------
+# Used for cross-server communication and first-join detection
+redis:
+  # Redis server address
+  host:
+
+  # Redis server port
+  port:
+
+  # Redis password
+  password:
+
+  # Connection timeout in milliseconds
+  timeout: 2000
+
+# -------------------------

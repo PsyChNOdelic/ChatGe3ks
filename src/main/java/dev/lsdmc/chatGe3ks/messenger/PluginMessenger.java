@@ -3,6 +3,8 @@ package dev.lsdmc.chatGe3ks.messenger;
 import dev.lsdmc.chatGe3ks.ChatGe3ks;
 import dev.lsdmc.chatGe3ks.util.Constants;
 import dev.lsdmc.chatGe3ks.util.LoggerUtils;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
@@ -75,9 +77,21 @@ public class PluginMessenger implements PluginMessageListener {
             }
 
             player.sendPluginMessage(plugin, Constants.Channels.BUNGEE, stream.toByteArray());
+
+            // Send feedback to player using Adventure API
+            Component feedbackMsg = Component.text("Sent message to subchannel: " + subchannel)
+                    .color(NamedTextColor.GRAY);
+            plugin.adventure().player(player).sendActionBar(feedbackMsg);
+
             return true;
         } catch (IOException e) {
             logger.error("Error sending plugin message", e);
+
+            // Send error message to player using Adventure API
+            Component errorMsg = Component.text("Failed to send message: " + e.getMessage())
+                    .color(NamedTextColor.RED);
+            plugin.adventure().player(player).sendActionBar(errorMsg);
+
             return false;
         }
     }
@@ -111,6 +125,16 @@ public class PluginMessenger implements PluginMessageListener {
             if (!sent) {
                 future.completeExceptionally(new IOException("Failed to send message"));
                 responseCallbacks.remove(requestId);
+
+                // Send error message to player using Adventure API
+                Component errorMsg = Component.text("Failed to send request message")
+                        .color(NamedTextColor.RED);
+                plugin.adventure().player(player).sendActionBar(errorMsg);
+            } else {
+                // Send waiting message to player using Adventure API
+                Component waitingMsg = Component.text("Waiting for response...")
+                        .color(NamedTextColor.YELLOW);
+                plugin.adventure().player(player).sendActionBar(waitingMsg);
             }
 
             // Set up timeout
@@ -119,12 +143,22 @@ public class PluginMessenger implements PluginMessageListener {
                     future.completeExceptionally(
                             new RuntimeException("Request timed out after " + responseTimeout + "ms"));
                     responseCallbacks.remove(requestId);
+
+                    // Send timeout message to player using Adventure API
+                    Component timeoutMsg = Component.text("Request timed out after " + responseTimeout + "ms")
+                            .color(NamedTextColor.RED);
+                    plugin.adventure().player(player).sendActionBar(timeoutMsg);
                 }
             }, responseTimeout / 50); // Convert ms to ticks
 
         } catch (IOException e) {
             future.completeExceptionally(e);
             responseCallbacks.remove(requestId);
+
+            // Send error message to player using Adventure API
+            Component errorMsg = Component.text("Error preparing request: " + e.getMessage())
+                    .color(NamedTextColor.RED);
+            plugin.adventure().player(player).sendActionBar(errorMsg);
         }
 
         return future;
@@ -151,10 +185,20 @@ public class PluginMessenger implements PluginMessageListener {
             byte[] data = new byte[length];
             in.readFully(data);
 
+            // Send notification to player using Adventure API
+            Component receiveMsg = Component.text("Received message on subchannel: " + subchannel)
+                    .color(NamedTextColor.GREEN);
+            plugin.adventure().player(player).sendActionBar(receiveMsg);
+
             handleIncomingMessage(subchannel, data, player);
 
         } catch (IOException e) {
             logger.error("Error reading plugin message", e);
+
+            // Send error message to player using Adventure API
+            Component errorMsg = Component.text("Error processing message: " + e.getMessage())
+                    .color(NamedTextColor.RED);
+            plugin.adventure().player(player).sendActionBar(errorMsg);
         }
     }
 
@@ -184,7 +228,14 @@ public class PluginMessenger implements PluginMessageListener {
 
                     // Execute callback on main thread
                     byte[] finalResponseData = responseData;
-                    plugin.getServer().getScheduler().runTask(plugin, () -> callback.accept(finalResponseData));
+                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        callback.accept(finalResponseData);
+
+                        // Send response notification to player using Adventure API
+                        Component responseMsg = Component.text("Response received and processed")
+                                .color(NamedTextColor.GREEN);
+                        plugin.adventure().player(player).sendActionBar(responseMsg);
+                    });
                 }
                 return;
             }
@@ -192,29 +243,39 @@ public class PluginMessenger implements PluginMessageListener {
             // Handle other subchannels
             switch (subchannel) {
                 case "Forward":
-                    handleForwardMessage(in);
+                    handleForwardMessage(in, player);
                     break;
 
                 case "PlayerCount":
-                    handlePlayerCountMessage(in);
+                    handlePlayerCountMessage(in, player);
                     break;
 
                 // Add more subchannel handlers as needed
 
                 default:
                     logger.debug("Received message on unhandled subchannel: " + subchannel);
+
+                    // Notify player about unhandled subchannel
+                    Component unhandledMsg = Component.text("Received message on unhandled subchannel: " + subchannel)
+                            .color(NamedTextColor.YELLOW);
+                    plugin.adventure().player(player).sendActionBar(unhandledMsg);
                     break;
             }
 
         } catch (Exception e) {
             logger.error("Error processing plugin message", e);
+
+            // Send error message to player using Adventure API
+            Component errorMsg = Component.text("Error processing message: " + e.getMessage())
+                    .color(NamedTextColor.RED);
+            plugin.adventure().player(player).sendActionBar(errorMsg);
         }
     }
 
     /**
      * Handle Forward subchannel messages
      */
-    private void handleForwardMessage(DataInputStream in) throws IOException {
+    private void handleForwardMessage(DataInputStream in, Player player) throws IOException {
         String server = in.readUTF();
         String channel = in.readUTF();
         short dataLength = in.readShort();
@@ -224,17 +285,36 @@ public class PluginMessenger implements PluginMessageListener {
         logger.debug("Received forwarded message from server: " + server +
                 ", channel: " + channel);
 
+        // Notify player
+        Component forwardMsg = Component.text("Received forwarded message from: " + server)
+                .color(NamedTextColor.AQUA);
+        plugin.adventure().player(player).sendActionBar(forwardMsg);
+
         // Process the forwarded data here if needed
     }
 
     /**
      * Handle PlayerCount subchannel messages
      */
-    private void handlePlayerCountMessage(DataInputStream in) throws IOException {
+    private void handlePlayerCountMessage(DataInputStream in, Player player) throws IOException {
         String server = in.readUTF();
         int playerCount = in.readInt();
 
         logger.debug("Server " + server + " has " + playerCount + " players");
+
+        // Notify player with rich formatted message
+        Component countMsg = Component.text("Server ")
+                .color(NamedTextColor.GRAY)
+                .append(Component.text(server)
+                        .color(NamedTextColor.GOLD))
+                .append(Component.text(" has ")
+                        .color(NamedTextColor.GRAY))
+                .append(Component.text(playerCount)
+                        .color(NamedTextColor.GREEN))
+                .append(Component.text(" players")
+                        .color(NamedTextColor.GRAY));
+
+        plugin.adventure().player(player).sendMessage(countMsg);
 
         // Process the player count information if needed
     }

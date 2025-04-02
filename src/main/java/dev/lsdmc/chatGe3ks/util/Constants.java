@@ -24,10 +24,6 @@ public final class Constants {
     public static final class Redis {
         public static final String KEY_PREFIX = "chatgeeks:";
         public static final String FIRSTJOIN_PREFIX = KEY_PREFIX + "firstjoin:";
-        public static final int DEFAULT_PORT = 6379;
-        public static final int DEFAULT_TIMEOUT = 2000;
-        public static final int MAX_ATTEMPTS = 3;
-        public static final long RETRY_DELAY = 500;
     }
 
     // Config keys
@@ -49,13 +45,21 @@ public final class Constants {
         public static final String WELCOME_RELOAD = WELCOME_BASE + ".reload";
     }
 
-    // Chat formatting
+    // Chat formatting (MiniMessage format)
     public static final class Chat {
+        // Legacy format (kept for reference)
         public static final String PREFIX = "§8[§6ChatGe3ks§8] §r";
         public static final String ERROR = PREFIX + "§c";
         public static final String SUCCESS = PREFIX + "§a";
         public static final String INFO = PREFIX + "§e";
         public static final String HELP = PREFIX + "§7";
+
+        // MiniMessage format
+        public static final String PREFIX_MINI_MESSAGE = "<dark_gray>[<gold>ChatGe3ks</gold>]</dark_gray> ";
+        public static final String ERROR_MINI_MESSAGE = "<red>";
+        public static final String SUCCESS_MINI_MESSAGE = "<green>";
+        public static final String INFO_MINI_MESSAGE = "<yellow>";
+        public static final String HELP_MINI_MESSAGE = "<gray>";
     }
 
     // Time constants

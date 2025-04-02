@@ -12,6 +12,7 @@ import dev.lsdmc.chatGe3ks.util.Constants;
 import dev.lsdmc.chatGe3ks.util.LoggerUtils;
 import dev.lsdmc.chatGe3ks.util.MessageUtils;
 import dev.lsdmc.chatGe3ks.welcome.WelcomeMessagesManager;
+import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,6 +32,9 @@ public final class ChatGe3ks extends JavaPlugin {
     private LoggerUtils loggerUtils;
     private MessageUtils messageUtils;
 
+    // Adventure API
+    private BukkitAudiences adventure;
+
     // Config values
     private int welcomeWindowDuration;
 
@@ -38,6 +42,9 @@ public final class ChatGe3ks extends JavaPlugin {
     public void onEnable() {
         // Save default config if it doesn't exist
         saveDefaultConfig();
+
+        // Initialize Adventure API
+        this.adventure = BukkitAudiences.create(this);
 
         // Initialize utility classes
         loggerUtils = new LoggerUtils(this);
@@ -153,6 +160,17 @@ public final class ChatGe3ks extends JavaPlugin {
             pluginMessenger.shutdown();
         }
 
+        // Close message utils
+        if (messageUtils != null) {
+            messageUtils.close();
+        }
+
+        // Close Adventure API
+        if (this.adventure != null) {
+            this.adventure.close();
+            this.adventure = null;
+        }
+
         // Cancel all tasks
         getServer().getScheduler().cancelTasks(this);
 
@@ -191,5 +209,12 @@ public final class ChatGe3ks extends JavaPlugin {
 
     public MessageUtils getMessageUtils() {
         return messageUtils;
+    }
+
+    public BukkitAudiences adventure() {
+        if(this.adventure == null) {
+            throw new IllegalStateException("Tried to access Adventure when the plugin was disabled!");
+        }
+        return this.adventure;
     }
 }

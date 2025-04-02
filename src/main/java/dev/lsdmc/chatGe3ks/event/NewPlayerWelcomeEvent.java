@@ -1,5 +1,6 @@
 package dev.lsdmc.chatGe3ks.event;
 
+import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
@@ -15,6 +16,7 @@ public class NewPlayerWelcomeEvent extends Event implements Cancellable {
     private final Player player;
     private boolean cancelled;
     private String welcomeMessage;
+    private Component welcomeComponent;
 
     /**
      * Creates a new welcome event for a player joining for the first time
@@ -25,6 +27,7 @@ public class NewPlayerWelcomeEvent extends Event implements Cancellable {
         this.player = player;
         this.cancelled = false;
         this.welcomeMessage = null; // Will use default if not set
+        this.welcomeComponent = null; // Will use default if not set
     }
 
     /**
@@ -65,6 +68,7 @@ public class NewPlayerWelcomeEvent extends Event implements Cancellable {
      */
     public void setWelcomeMessage(String welcomeMessage) {
         this.welcomeMessage = welcomeMessage;
+        this.welcomeComponent = null; // Reset component when string is set
     }
 
     /**
@@ -77,12 +81,40 @@ public class NewPlayerWelcomeEvent extends Event implements Cancellable {
     }
 
     /**
-     * Checks if a custom welcome message is set
+     * Sets a custom welcome component to override the random one
+     * This takes precedence over the string message if both are set
      *
-     * @return true if a custom message is set
+     * @param welcomeComponent The component to use, or null to use default
+     */
+    public void setWelcomeComponent(Component welcomeComponent) {
+        this.welcomeComponent = welcomeComponent;
+    }
+
+    /**
+     * Gets the custom welcome component if set
+     *
+     * @return The custom component or null if not set
+     */
+    public Component getWelcomeComponent() {
+        return welcomeComponent;
+    }
+
+    /**
+     * Checks if a custom welcome message or component is set
+     *
+     * @return true if a custom message or component is set
      */
     public boolean hasCustomWelcomeMessage() {
-        return welcomeMessage != null && !welcomeMessage.isEmpty();
+        return welcomeMessage != null || welcomeComponent != null;
+    }
+
+    /**
+     * Checks if a custom welcome component is set
+     *
+     * @return true if a custom component is set
+     */
+    public boolean hasCustomWelcomeComponent() {
+        return welcomeComponent != null;
     }
 
     /**

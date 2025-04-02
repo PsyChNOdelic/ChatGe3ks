@@ -19,7 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class ChatGe3ks extends JavaPlugin {
 
-    // Managers for handling different aspects of the plugin
+    // Managers
     private DataManager dataManager;
     private WelcomeMessagesManager welcomeMessagesManager;
     private RewardsManager rewardsManager;
@@ -128,7 +128,7 @@ public final class ChatGe3ks extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(
                 this,
                 new CleanupTask(this, chatListener),
-                1200L, // 1 minute delay (1200 ticks)
+                1200L, // 1 minute delay 
                 1200L  // 1 minute interval
         );
     }
@@ -136,7 +136,7 @@ public final class ChatGe3ks extends JavaPlugin {
     private void setupIntegrations() {
         PluginManager pm = Bukkit.getPluginManager();
 
-        // Optional integration: Hook into DiscordSRV if available
+        // SRV
         if (pm.getPlugin("DiscordSRV") != null) {
             loggerUtils.info("DiscordSRV detected, initializing Discord integration...");
             setupDiscordIntegration();
@@ -144,8 +144,6 @@ public final class ChatGe3ks extends JavaPlugin {
     }
 
     private void setupDiscordIntegration() {
-        // Initialize Discord integration here
-        // This method is separate to improve code organization
     }
 
     @Override
@@ -178,7 +176,7 @@ public final class ChatGe3ks extends JavaPlugin {
         loggerUtils.logShutdown();
     }
 
-    // Getters for our managers and components
+    // Getters
     public DataManager getDataManager() {
         return dataManager;
     }

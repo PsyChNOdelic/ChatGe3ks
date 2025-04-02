@@ -1,10 +1,40 @@
 name: ChatGe3ks
-version: '1'
+version: '1.0.0'
 main: dev.lsdmc.chatGe3ks.ChatGe3ks
 api-version: '1.21'
 load: STARTUP
 authors: [ Nenf ]
+description: A plugin that rewards players for welcoming new joiners to the server.
+
 commands:
   welcomemsg:
     description: Manage welcome messages.
     usage: /<command> <list|add|remove|reload>
+    aliases: [wm]
+    permission: chatgeeks.command.welcomemsg
+
+permissions:
+  chatgeeks.command.welcomemsg:
+    description: Base permission for the welcomemsg command
+    default: op
+    children:
+      chatgeeks.command.welcomemsg.list: true
+      chatgeeks.command.welcomemsg.add: true
+      chatgeeks.command.welcomemsg.remove: true
+      chatgeeks.command.welcomemsg.reload: true
+
+  chatgeeks.command.welcomemsg.list:
+    description: Allows listing welcome messages
+    default: op
+
+  chatgeeks.command.welcomemsg.add:
+    description: Allows adding welcome messages
+    default: op
+
+  chatgeeks.command.welcomemsg.remove:
+    description: Allows removing welcome messages
+    default: op
+
+  chatgeeks.command.welcomemsg.reload:
+    description: Allows reloading welcome messages
+    default: op

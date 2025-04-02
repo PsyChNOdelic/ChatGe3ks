@@ -1,15 +1,19 @@
 package dev.lsdmc.chatGe3ks.welcome;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import dev.lsdmc.chatGe3ks.ChatGe3ks;
+import dev.lsdmc.chatGe3ks.util.Constants;
+import dev.lsdmc.chatGe3ks.util.LoggerUtils;
 
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Level;
 
 public class WelcomeMessagesManager {
 
@@ -17,14 +21,16 @@ public class WelcomeMessagesManager {
     private final File messagesFile;
     private List<String> messages;
     private final Gson gson;
-    private final Random random;
+    private final ThreadLocalRandom random;
+    private final LoggerUtils logger;
 
     public WelcomeMessagesManager(ChatGe3ks plugin) {
         this.plugin = plugin;
-        this.gson = new Gson();
-        this.random = new Random();
-        this.messagesFile = new File(plugin.getDataFolder(), "welcome_messages.json");
+        this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.random = ThreadLocalRandom.current();
+        this.messagesFile = new File(plugin.getDataFolder(), Constants.Files.WELCOME_MESSAGES_FILE);
         this.messages = new ArrayList<>();
+        this.logger = plugin.getLoggerUtils();
     }
 
     /**
@@ -33,35 +39,56 @@ public class WelcomeMessagesManager {
      */
     public void loadMessages() {
         if (!messagesFile.exists()) {
-            if (!plugin.getDataFolder().exists()) {
-                plugin.getDataFolder().mkdirs();
+            createDefaultMessagesFile();
+        } else {
+            loadExistingMessagesFile();
+        }
+    }
+
+    private void createDefaultMessagesFile() {
+        try {
+            if (!plugin.getDataFolder().exists() && !plugin.getDataFolder().mkdirs()) {
+                logger.warning("Failed to create plugin directory");
             }
             messages = getDefaultMessages();
             saveMessages();
-            plugin.getLogger().info("WelcomeMessagesManager: Created default welcome messages file.");
-        } else {
-            try (Reader reader = new InputStreamReader(new FileInputStream(messagesFile), StandardCharsets.UTF_8)) {
-                Type listType = new TypeToken<List<String>>() {}.getType();
-                messages = gson.fromJson(reader, listType);
-                if (messages == null) {
-                    messages = new ArrayList<>();
-                }
-                plugin.getLogger().info("WelcomeMessagesManager: Loaded " + messages.size() + " welcome messages.");
-            } catch (IOException e) {
-                plugin.getLogger().severe("WelcomeMessagesManager: Failed to load welcome messages: " + e.getMessage());
-                messages = new ArrayList<>();
+            logger.info("Created default welcome messages file with " + messages.size() + " messages");
+        } catch (Exception e) {
+            logger.error("Failed to create default welcome messages file", e);
+            messages = getDefaultMessages(); // Fallback to in-memory defaults
+        }
+    }
+
+    private void loadExistingMessagesFile() {
+        try (Reader reader = new InputStreamReader(new FileInputStream(messagesFile), StandardCharsets.UTF_8)) {
+            Type listType = new TypeToken<List<String>>() {}.getType();
+            List<String> loadedMessages = gson.fromJson(reader, listType);
+
+            if (loadedMessages == null || loadedMessages.isEmpty()) {
+                logger.warning("Loaded welcome messages file was empty or invalid, using defaults");
+                messages = getDefaultMessages();
+                saveMessages(); // Overwrite the invalid file
+            } else {
+                messages = loadedMessages;
+                logger.info("Loaded " + messages.size() + " welcome messages");
             }
+        } catch (IOException e) {
+            logger.error("Failed to load welcome messages", e);
+            messages = getDefaultMessages(); // Fallback to in-memory defaults
         }
     }
 
     /**
      * Saves the current welcome messages to welcome_messages.json.
+     * @return true if save was successful, false otherwise
      */
-    public void saveMessages() {
+    public boolean saveMessages() {
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(messagesFile), StandardCharsets.UTF_8)) {
             gson.toJson(messages, writer);
+            return true;
         } catch (IOException e) {
-            plugin.getLogger().severe("WelcomeMessagesManager: Failed to save welcome messages: " + e.getMessage());
+            logger.error("Failed to save welcome messages", e);
+            return false;
         }
     }
 
@@ -74,18 +101,22 @@ public class WelcomeMessagesManager {
         if (messages.isEmpty()) {
             return "Welcome to the server!";
         }
-        int index = random.nextInt(messages.size());
-        return messages.get(index);
+        return messages.get(random.nextInt(messages.size()));
     }
 
     /**
      * Adds a new welcome message.
      *
      * @param message The message to add.
+     * @return true if message was added and saved successfully
      */
-    public void addMessage(String message) {
-        messages.add(message);
-        saveMessages();
+    public boolean addMessage(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            return false;
+        }
+
+        messages.add(message.trim());
+        return saveMessages();
     }
 
     /**
@@ -95,12 +126,12 @@ public class WelcomeMessagesManager {
      * @return true if removal was successful.
      */
     public boolean removeMessage(int index) {
-        if (index >= 0 && index < messages.size()) {
-            messages.remove(index);
-            saveMessages();
-            return true;
+        if (index < 0 || index >= messages.size()) {
+            return false;
         }
-        return false;
+
+        messages.remove(index);
+        return saveMessages();
     }
 
     /**
@@ -113,6 +144,8 @@ public class WelcomeMessagesManager {
         defaults.add("Welcome {player} to our server!");
         defaults.add("Hello {player}, enjoy your stay!");
         defaults.add("Greetings {player}! Make yourself at home.");
+        defaults.add("Welcome to the community, {player}!");
+        defaults.add("A wild {player} has appeared!");
         return defaults;
     }
 
@@ -122,6 +155,6 @@ public class WelcomeMessagesManager {
      * @return List of welcome messages.
      */
     public List<String> getMessages() {
-        return messages;
+        return new ArrayList<>(messages); // Return a copy to prevent external modification
     }
 }

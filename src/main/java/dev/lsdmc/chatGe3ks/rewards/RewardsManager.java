@@ -1,7 +1,10 @@
 package dev.lsdmc.chatGe3ks.rewards;
 
 import dev.lsdmc.chatGe3ks.ChatGe3ks;
+import dev.lsdmc.chatGe3ks.util.Constants;
+import dev.lsdmc.chatGe3ks.util.LoggerUtils;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -13,7 +16,8 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Level;
 
 public class RewardsManager {
 
@@ -21,14 +25,16 @@ public class RewardsManager {
     private final File rewardsFile;
     private List<Reward> rewards;
     private final Gson gson;
-    private final Random random;
+    private final ThreadLocalRandom random;
+    private final LoggerUtils logger;
 
     public RewardsManager(ChatGe3ks plugin) {
         this.plugin = plugin;
-        this.gson = new Gson();
-        this.random = new Random();
-        this.rewardsFile = new File(plugin.getDataFolder(), "rewards.json");
+        this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.random = ThreadLocalRandom.current();
+        this.rewardsFile = new File(plugin.getDataFolder(), Constants.Files.REWARDS_FILE);
         this.rewards = new ArrayList<>();
+        this.logger = plugin.getLoggerUtils();
     }
 
     /**
@@ -37,35 +43,81 @@ public class RewardsManager {
      */
     public void loadRewards() {
         if (!rewardsFile.exists()) {
-            if (!plugin.getDataFolder().exists()) {
-                plugin.getDataFolder().mkdirs();
+            createDefaultRewardsFile();
+        } else {
+            loadExistingRewardsFile();
+        }
+    }
+
+    private void createDefaultRewardsFile() {
+        try {
+            if (!plugin.getDataFolder().exists() && !plugin.getDataFolder().mkdirs()) {
+                logger.warning("Failed to create plugin directory");
             }
             rewards = getDefaultRewards();
             saveRewards();
-            plugin.getLogger().info("RewardsManager: Created default rewards file.");
-        } else {
-            try (Reader reader = new InputStreamReader(new FileInputStream(rewardsFile), StandardCharsets.UTF_8)) {
-                Type listType = new TypeToken<List<Reward>>() {}.getType();
-                rewards = gson.fromJson(reader, listType);
-                if (rewards == null) {
-                    rewards = new ArrayList<>();
-                }
-                plugin.getLogger().info("RewardsManager: Loaded " + rewards.size() + " rewards.");
-            } catch (IOException e) {
-                plugin.getLogger().severe("RewardsManager: Failed to load rewards: " + e.getMessage());
-                rewards = new ArrayList<>();
+            logger.info("Created default rewards file with " + rewards.size() + " rewards.");
+        } catch (Exception e) {
+            logger.error("Failed to create default rewards file", e);
+            rewards = getDefaultRewards(); // Fallback to in-memory defaults
+        }
+    }
+
+    private void loadExistingRewardsFile() {
+        try (Reader reader = new InputStreamReader(new FileInputStream(rewardsFile), StandardCharsets.UTF_8)) {
+            Type listType = new TypeToken<List<Reward>>() {}.getType();
+            List<Reward> loadedRewards = gson.fromJson(reader, listType);
+
+            if (loadedRewards == null || loadedRewards.isEmpty()) {
+                logger.warning("Loaded rewards file was empty or invalid, using defaults");
+                rewards = getDefaultRewards();
+                saveRewards(); // Overwrite the invalid file
+            } else {
+                rewards = loadedRewards;
+                validateRewards();
+                logger.info("Loaded " + rewards.size() + " rewards");
             }
+        } catch (IOException e) {
+            logger.error("Failed to load rewards", e);
+            rewards = getDefaultRewards(); // Fallback to in-memory defaults
+        }
+    }
+
+    /**
+     * Validates all rewards to ensure they are valid (e.g., items exist)
+     */
+    private void validateRewards() {
+        List<Reward> invalidRewards = new ArrayList<>();
+
+        for (Reward reward : rewards) {
+            if (reward.getType().equalsIgnoreCase("item")) {
+                try {
+                    Material.valueOf(reward.getValue().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    logger.warning("Invalid material in reward: " + reward.getValue());
+                    invalidRewards.add(reward);
+                }
+            }
+        }
+
+        if (!invalidRewards.isEmpty()) {
+            rewards.removeAll(invalidRewards);
+            logger.warning("Removed " + invalidRewards.size() + " invalid rewards");
+            saveRewards(); // Save the fixed rewards
         }
     }
 
     /**
      * Saves the rewards to rewards.json.
+     * @return true if save was successful, false otherwise
      */
-    public void saveRewards() {
+    public boolean saveRewards() {
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(rewardsFile), StandardCharsets.UTF_8)) {
             gson.toJson(rewards, writer);
+            return true;
         } catch (IOException e) {
-            plugin.getLogger().severe("RewardsManager: Failed to save rewards: " + e.getMessage());
+            logger.error("Failed to save rewards", e);
+            return false;
         }
     }
 
@@ -73,22 +125,71 @@ public class RewardsManager {
      * Gives a random reward to the specified player based on chance weights.
      *
      * @param welcomer The player receiving the reward.
+     * @return true if a reward was given successfully
      */
-    public void giveRandomReward(Player welcomer) {
+    public boolean giveRandomReward(Player welcomer) {
         if (rewards.isEmpty()) {
-            plugin.getLogger().warning("RewardsManager: No rewards defined.");
-            return;
+            logger.warning("No rewards defined, cannot give reward to " + welcomer.getName());
+            return false;
         }
+
+        if (!welcomer.isOnline()) {
+            return false;
+        }
+
         double totalChance = rewards.stream().mapToDouble(Reward::getChance).sum();
         double rand = random.nextDouble() * totalChance;
         double cumulative = 0;
+
         for (Reward reward : rewards) {
             cumulative += reward.getChance();
             if (rand <= cumulative) {
-                reward.giveReward(welcomer);
-                return;
+                return reward.giveReward(welcomer, plugin);
             }
         }
+
+        // Should never reach here if rewards exist and chances are positive
+        logger.warning("Failed to select a reward for " + welcomer.getName());
+        return false;
+    }
+
+    /**
+     * Adds a new reward.
+     *
+     * @param reward The reward to add
+     * @return true if the reward was added successfully
+     */
+    public boolean addReward(Reward reward) {
+        if (reward == null) {
+            return false;
+        }
+
+        // Validate item rewards
+        if (reward.getType().equalsIgnoreCase("item")) {
+            try {
+                Material.valueOf(reward.getValue().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
+
+        rewards.add(reward);
+        return saveRewards();
+    }
+
+    /**
+     * Removes a reward at the specified index.
+     *
+     * @param index The index to remove
+     * @return true if the removal was successful
+     */
+    public boolean removeReward(int index) {
+        if (index < 0 || index >= rewards.size()) {
+            return false;
+        }
+
+        rewards.remove(index);
+        return saveRewards();
     }
 
     /**
@@ -98,10 +199,21 @@ public class RewardsManager {
      */
     private List<Reward> getDefaultRewards() {
         List<Reward> defaults = new ArrayList<>();
-        // Default reward: Give 1 diamond with 100% chance.
-        defaults.add(new Reward("item", "DIAMOND", 1, 100.0));
-        // Add more defaults if needed.
+        // Default rewards with different chances
+        defaults.add(new Reward("item", "DIAMOND", 1, 10.0));
+        defaults.add(new Reward("item", "IRON_INGOT", 5, 30.0));
+        defaults.add(new Reward("item", "GOLD_INGOT", 3, 20.0));
+        defaults.add(new Reward("command", "give {player} minecraft:experience_bottle 5", 0, 40.0));
         return defaults;
+    }
+
+    /**
+     * Gets all available rewards.
+     *
+     * @return List of rewards
+     */
+    public List<Reward> getRewards() {
+        return new ArrayList<>(rewards); // Return a copy to prevent external modification
     }
 
     /**
@@ -143,24 +255,67 @@ public class RewardsManager {
          * For "command" rewards, dispatches the command from the console.
          *
          * @param player The player receiving the reward.
+         * @param plugin The plugin instance for logging
+         * @return true if the reward was given successfully
          */
-        public void giveReward(Player player) {
-            if (type.equalsIgnoreCase("item")) {
-                try {
-                    Material material = Material.valueOf(value.toUpperCase());
-                    ItemStack itemStack = new ItemStack(material, amount);
-                    player.getInventory().addItem(itemStack);
-                    player.sendMessage("You received a reward: " + amount + " " + material.name());
-                } catch (IllegalArgumentException e) {
-                    player.sendMessage("Reward error: Invalid material " + value);
-                }
-            } else if (type.equalsIgnoreCase("command")) {
-                String command = value.replace("{player}", player.getName());
-                Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), command);
-                player.sendMessage("You received a reward: Command executed!");
-            } else {
-                player.sendMessage("Reward error: Unknown reward type " + type);
+        public boolean giveReward(Player player, ChatGe3ks plugin) {
+            if (!player.isOnline()) {
+                return false;
             }
+
+            try {
+                if (type.equalsIgnoreCase("item")) {
+                    return giveItemReward(player, plugin);
+                } else if (type.equalsIgnoreCase("command")) {
+                    return giveCommandReward(player, plugin);
+                } else {
+                    plugin.getLoggerUtils().warning("Unknown reward type: " + type);
+                    return false;
+                }
+            } catch (Exception e) {
+                plugin.getLoggerUtils().error("Error giving reward to " + player.getName(), e);
+                return false;
+            }
+        }
+
+        private boolean giveItemReward(Player player, ChatGe3ks plugin) {
+            try {
+                Material material = Material.valueOf(value.toUpperCase());
+                ItemStack itemStack = new ItemStack(material, amount);
+
+                // Check if player has inventory space
+                if (player.getInventory().firstEmpty() == -1) {
+                    // Inventory full, drop at player's location
+                    player.getWorld().dropItem(player.getLocation(), itemStack);
+                    plugin.getMessageUtils().sendSuccess(player,
+                            "Your inventory was full! Your reward (" +
+                                    amount + " " + material.name() + ") was dropped at your feet.");
+                } else {
+                    player.getInventory().addItem(itemStack);
+                    plugin.getMessageUtils().sendSuccess(player,
+                            "You received a reward: " + amount + " " +
+                                    material.name().toLowerCase().replace("_", " "));
+                }
+                return true;
+            } catch (IllegalArgumentException e) {
+                plugin.getMessageUtils().sendError(player, "Reward error: Invalid material " + value);
+                plugin.getLoggerUtils().warning("Invalid material in reward: " + value);
+                return false;
+            }
+        }
+
+        private boolean giveCommandReward(Player player, ChatGe3ks plugin) {
+            String command = value.replace("{player}", player.getName());
+            boolean success = Bukkit.getServer().dispatchCommand(
+                    Bukkit.getConsoleSender(), command);
+
+            if (success) {
+                plugin.getMessageUtils().sendSuccess(player, "You received a special reward!");
+            } else {
+                plugin.getLoggerUtils().warning("Failed to execute command reward: " + command);
+                return false;
+            }
+            return success;
         }
     }
 }

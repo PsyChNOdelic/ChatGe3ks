@@ -1,12 +1,16 @@
 package dev.lsdmc.chatGe3ks;
 
-import dev.lsdmc.chatGe3ks.commands.WelcomeMsgCommand;
+import dev.lsdmc.chatGe3ks.commands.CommandManager;
 import dev.lsdmc.chatGe3ks.data.DataManager;
 import dev.lsdmc.chatGe3ks.listeners.ChatListener;
 import dev.lsdmc.chatGe3ks.listeners.JoinListener;
 import dev.lsdmc.chatGe3ks.messenger.PluginMessenger;
 import dev.lsdmc.chatGe3ks.rewards.RewardsManager;
 import dev.lsdmc.chatGe3ks.tasks.CleanupTask;
+import dev.lsdmc.chatGe3ks.util.ConfigValidator;
+import dev.lsdmc.chatGe3ks.util.Constants;
+import dev.lsdmc.chatGe3ks.util.LoggerUtils;
+import dev.lsdmc.chatGe3ks.util.MessageUtils;
 import dev.lsdmc.chatGe3ks.welcome.WelcomeMessagesManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.PluginManager;
@@ -14,67 +18,127 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class ChatGe3ks extends JavaPlugin {
 
-    private static ChatGe3ks instance;
-
-    // Managers for handling data, welcome messages, and rewards.
+    // Managers for handling different aspects of the plugin
     private DataManager dataManager;
     private WelcomeMessagesManager welcomeMessagesManager;
     private RewardsManager rewardsManager;
-
-    // ChatListener instance for handling chat events (uses config values)
+    private CommandManager commandManager;
+    private PluginMessenger pluginMessenger;
     private ChatListener chatListener;
 
-    // PluginMessenger for plugin messaging (e.g., cross-server)
-    private PluginMessenger pluginMessenger;
+    // Utility classes
+    private ConfigValidator configValidator;
+    private LoggerUtils loggerUtils;
+    private MessageUtils messageUtils;
+
+    // Config values
+    private int welcomeWindowDuration;
 
     @Override
     public void onEnable() {
-        instance = this;
-
         // Save default config if it doesn't exist
         saveDefaultConfig();
 
-        // Initialize DataManager (handles Redis connections and first-join checks)
-        dataManager = new DataManager(this);
-        dataManager.init();
+        // Initialize utility classes
+        loggerUtils = new LoggerUtils(this);
+        messageUtils = new MessageUtils(this);
 
-        // Initialize WelcomeMessagesManager (loads and manages welcome messages)
+        // Log startup
+        loggerUtils.logStartup();
+
+        // Initialize configuration validator
+        configValidator = new ConfigValidator(this);
+        if (!configValidator.validateConfig()) {
+            loggerUtils.warning("Invalid configuration detected. Using safe defaults where possible.");
+        }
+
+        // Load config values
+        loadConfigValues();
+
+        // Initialize managers
+        initializeManagers();
+
+        // Register event listeners
+        registerEventListeners();
+
+        // Register commands
+        registerCommands();
+
+        // Schedule tasks
+        scheduleTasks();
+
+        // Optional integrations
+        setupIntegrations();
+
+        loggerUtils.info("ChatGe3ks has been enabled!");
+    }
+
+    private void loadConfigValues() {
+        welcomeWindowDuration = getConfig().getInt(Constants.Config.WELCOME_WINDOW,
+                (int) Constants.Time.DEFAULT_WELCOME_WINDOW_SECONDS);
+        loggerUtils.info("Welcome window duration set to " + welcomeWindowDuration + " seconds");
+    }
+
+    private void initializeManagers() {
+        // Initialize DataManager
+        dataManager = new DataManager(this);
+        if (!dataManager.init()) {
+            loggerUtils.warning("Failed to initialize Redis connection - first join detection may not work properly");
+        }
+
+        // Initialize WelcomeMessagesManager
         welcomeMessagesManager = new WelcomeMessagesManager(this);
         welcomeMessagesManager.loadMessages();
 
-        // Initialize RewardsManager (loads rewards configuration and logic)
+        // Initialize RewardsManager
         rewardsManager = new RewardsManager(this);
         rewardsManager.loadRewards();
 
-        // Initialize PluginMessenger for cross-server messaging
+        // Initialize PluginMessenger
         pluginMessenger = new PluginMessenger(this);
 
-        // Register commands
-        if (getCommand("welcomemsg") != null) {
-            getCommand("welcomemsg").setExecutor(new WelcomeMsgCommand(this));
-        } else {
-            getLogger().warning("Command 'welcomemsg' not defined in plugin.yml!");
-        }
+        // Initialize CommandManager
+        commandManager = new CommandManager(this);
+    }
 
-        // Register event listeners
+    private void registerEventListeners() {
         PluginManager pm = Bukkit.getPluginManager();
+
+        // Register JoinListener
         pm.registerEvents(new JoinListener(this, dataManager, welcomeMessagesManager), this);
 
-        // Initialize and register ChatListener instance that uses config values
-        chatListener = new ChatListener(this, rewardsManager);
+        // Initialize and register ChatListener
+        chatListener = new ChatListener(this, rewardsManager, welcomeWindowDuration);
         pm.registerEvents(chatListener, this);
+    }
+
+    private void registerCommands() {
+        commandManager.registerCommands();
+    }
+
+    private void scheduleTasks() {
+        // Schedule cleanup task (runs every minute)
+        getServer().getScheduler().runTaskTimer(
+                this,
+                new CleanupTask(this, chatListener),
+                1200L, // 1 minute delay (1200 ticks)
+                1200L  // 1 minute interval
+        );
+    }
+
+    private void setupIntegrations() {
+        PluginManager pm = Bukkit.getPluginManager();
 
         // Optional integration: Hook into DiscordSRV if available
         if (pm.getPlugin("DiscordSRV") != null) {
-            getLogger().info("DiscordSRV detected, initializing Discord integration...");
-            // Insert your Discord integration code here.
+            loggerUtils.info("DiscordSRV detected, initializing Discord integration...");
+            setupDiscordIntegration();
         }
+    }
 
-        // Schedule cleanup task to remove expired welcome window entries.
-        // This task runs every 60 seconds (1200 ticks)
-        getServer().getScheduler().runTaskTimer(this, new CleanupTask(this), 1200L, 1200L);
-
-        getLogger().info("ChatGe3ks has been enabled!");
+    private void setupDiscordIntegration() {
+        // Initialize Discord integration here
+        // This method is separate to improve code organization
     }
 
     @Override
@@ -83,18 +147,20 @@ public final class ChatGe3ks extends JavaPlugin {
         if (dataManager != null) {
             dataManager.shutdown();
         }
-        getLogger().info("ChatGe3ks has been disabled!");
+
+        // Close plugin messenger
+        if (pluginMessenger != null) {
+            pluginMessenger.shutdown();
+        }
+
+        // Cancel all tasks
+        getServer().getScheduler().cancelTasks(this);
+
+        // Log shutdown
+        loggerUtils.logShutdown();
     }
 
-    /**
-     * Provides access to the main plugin instance.
-     * @return The ChatGe3ks instance.
-     */
-    public static ChatGe3ks getInstance() {
-        return instance;
-    }
-
-    // Getters for our managers and components:
+    // Getters for our managers and components
     public DataManager getDataManager() {
         return dataManager;
     }
@@ -113,5 +179,17 @@ public final class ChatGe3ks extends JavaPlugin {
 
     public PluginMessenger getPluginMessenger() {
         return pluginMessenger;
+    }
+
+    public CommandManager getCommandManager() {
+        return commandManager;
+    }
+
+    public LoggerUtils getLoggerUtils() {
+        return loggerUtils;
+    }
+
+    public MessageUtils getMessageUtils() {
+        return messageUtils;
     }
 }

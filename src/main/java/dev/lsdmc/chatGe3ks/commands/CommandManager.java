@@ -27,13 +27,13 @@ public class CommandManager {
      * Registers all plugin commands
      */
     public void registerCommands() {
-        // Create command executors
+       
         WelcomeMsgCommand welcomeMsgCommand = new WelcomeMsgCommand(plugin);
 
-        // Register commands with the manager (for tracking)
+        
         registerCommand("welcomemsg", welcomeMsgCommand);
 
-        // Add more commands here as they are created
+        
     }
 
     /**
